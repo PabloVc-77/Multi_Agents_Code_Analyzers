@@ -2,3 +2,4 @@ crewai
 python-dotenv
 pyyaml
 litellm
+fpdf2
