@@ -1,0 +1,21 @@
+tarea_analisis:
+  description: >
+    Analiza el siguiente código en busca de errores y vulnerabilidades: {code}. 
+    Genera un informe detallado de los hallazgos.
+  expected_output: >
+    Una lista de errores encontrados y sugerencias de corrección.
+  agent: analizador
+
+tarea_optimizacion:
+  description: >
+    Toma el informe del analizador y el código original {code} para crear una versión optimizada.
+  expected_output: >
+    El código fuente refactorizado y optimizado.
+  agent: optimizador
+
+tarea_documentacion:
+  description: >
+    Basándote en el código optimizado final, redacta la documentación técnica completa.
+  expected_output: >
+    Un documento Markdown que incluya la explicación del código y el código final documentado.
+  agent: documentador
