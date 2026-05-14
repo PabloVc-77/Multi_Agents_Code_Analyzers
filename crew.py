@@ -1,76 +1,31 @@
-# AGENTS
+from crewai import Crew, Process
+from agents import CodeAgents
+from tasks import CodeTasks
 
-import os
-from crewai import Agent, LLM
-from dotenv import load_dotenv
+class CodeAnalysisCrew:
+    def __init__(self, code):
+        self.code = code
 
-load_dotenv()
+    def run(self):
+        agents = CodeAgents()
+        tasks = CodeTasks()
 
-llm = LLM(
-    model= "openai/gpt-oss-120b",
-    base_url=os.getenv("API_BASE"),
-    api_key=os.getenv("API_KEY"),
-    temperature=0.2,
-    max_retries=5,
-)
+        # Instanciar agentes
+        analista = agents.analizador()
+        optimista = agents.optimizador()
+        doc = agents.documentador()
 
-code_analyzer = Agent(
-    role="Code Analyzer",
-    goal="Detect errors and bad practices in code",
-    backstory="Expert software reviewer specialized in clean code.",
-    llm=llm
-)
+        # Instanciar tareas
+        t1 = tasks.tarea_analisis(analista)
+        t2 = tasks.tarea_optimizacion(optimista)
+        t3 = tasks.tarea_documentacion(doc)
 
-optimizer = Agent(
-    role="Code Optimizer",
-    goal="Suggest performance and readability improvements",
-    backstory="Expert in code optimization and software architecture.",
-    llm=llm
-)
+        crew = Crew(
+            agents=[analista, optimista, doc],
+            tasks=[t1, t2, t3],
+            process=Process.sequential, # El orden importa aquí
+            verbose=True
+        )
 
-documenter = Agent(
-    role="Code Documenter",
-    goal="Generate technical documentation",
-    backstory="Expert technical writer specialized in software documentation.",
-    llm=llm
-)
-
-# TASKS
-
-from crewai import Task
-
-analyze_task = Task(
-    description="Analyze the following code and detect bugs, bad practices and security issues:\n\n{code}",
-    agent=code_analyzer,
-    expected_output="List of detected issues."
-)
-
-optimize_task = Task(
-    description="Suggest performance, readability and maintainability improvements for the following code:\n\n{code}",
-    agent=optimizer,
-    expected_output="Optimization suggestions."
-)
-
-document_task = Task(
-    description="Generate clear technical documentation in Markdown for the following code:\n\n{code}",
-    agent=documenter,
-    expected_output="Markdown technical documentation."
-)
-
-# CREW
-from crewai import Crew
-
-code_analysis_crew = Crew(
-    agents=[
-        code_analyzer,
-        optimizer,
-        documenter
-    ],
-    tasks=[
-        analyze_task,
-        optimize_task,
-        document_task
-    ],
-    process="sequential",
-    verbose=True
+        return crew.kickoff(inputs={'code': self.code})
 )
