@@ -4,6 +4,11 @@ from fpdf import FPDF
 from tools import read_code_file
 from crew import CodeAnalysisCrew  # Importamos la clase, no la instancia
 
+import re
+
+def clean_text(text):
+    return re.sub(r'[^\x00-\x7F]+', '', text)
+
 # 1. Cargar variables de entorno (API Keys, etc.)
 load_dotenv()
 
@@ -38,6 +43,8 @@ def run_analysis():
 
     # El objeto 'result' de CrewAI tiene un atributo .raw con el string final
     contenido_final = str(result.raw) if hasattr(result, 'raw') else str(result)
+
+    contenido_final = clean_text(contenido_final)
 
     pdf.multi_cell(0, 6, contenido_final)
     

@@ -28,4 +28,4 @@ class CodeAnalysisCrew:
         )
 
         return crew.kickoff(inputs={'code': self.code})
-)
+
