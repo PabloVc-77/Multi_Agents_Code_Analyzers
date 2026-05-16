@@ -1,57 +1,43 @@
 import os
 from dotenv import load_dotenv
-from fpdf import FPDF
-from tools import read_code_file
-from crew import CodeAnalysisCrew  # Importamos la clase, no la instancia
+from crew import CodeAnalysisCrew
 
+import sys
 import re
 
 def clean_text(text):
     return re.sub(r'[^\x00-\x7F]+', '', text)
 
-# 1. Cargar variables de entorno (API Keys, etc.)
+# Cargar variables de entorno (API Keys, etc.)
 load_dotenv()
 
-def run_analysis():
-    # 2. Leer el código fuente que queremos analizar
-    try:
-        code_to_analyze = read_code_file("data/input/sar.py")
-    except FileNotFoundError:
-        print("Error: No se encontró el archivo de entrada en data/input/sar.py")
-        return
+def main():
+    # PRE-PROCESAR INFORMACIÓN
+    if len(sys.argv) < 2:
+        print("No se han aportado archivos para analizar")
+        print("Uso: python main.py <path_to_file>")
+        sys.exit(1)
 
-    # 3. Inicializar el Crew con el código y ejecutarlo
-    print("Iniciando análisis multi-agente...")
-    analysis_flow = CodeAnalysisCrew(code_to_analyze)
-    result = analysis_flow.run()
+    filepath = sys.argv[1]
 
-    # 4. Crear la carpeta de salida si no existe
-    output_path = "outputs/reports"
-    if not os.path.exists(output_path):
-        os.makedirs(output_path)
+    if not os.path.exists(filepath):
+        print(f"No se ha encontrado el archivo: {filepath}")
+        sys.exit(1)
 
-    # 5. Generar el reporte PDF
-    print("Generando reporte PDF...")
-    pdf = FPDF()
-    pdf.add_page()
-    
-    try:
-        pdf.set_font("Arial", size=11)
-    except:
-        pdf.add_font("Arial", fname="C:/Windows/Fonts/arial.ttf")
-        pdf.set_font("Arial", size=11)
+    with open(filepath, "r", encoding="utf-8") as f:
+        code = f.read()
+ 
+    filename = os.path.basename(filepath)
 
-    # El objeto 'result' de CrewAI tiene un atributo .raw con el string final
-    contenido_final = str(result.raw) if hasattr(result, 'raw') else str(result)
+    # Iniciar la CREW
+    CodeAnalysisCrew().run().kickoff(
+        inputs={
+            "code": code,
+            "filename": filename,
+        }
+    )
 
-    contenido_final = clean_text(contenido_final)
-
-    pdf.multi_cell(0, 6, contenido_final)
-    
-    report_name = f"{output_path}/report.pdf"
-    pdf.output(report_name)
-    
-    print(f"¡Hecho! El reporte se ha guardado en: {report_name}")
+    print(f"\n Full report saved to: outputs/reports/review_{filename}.md")
 
 if __name__ == "__main__":
-    run_analysis()
+    main()

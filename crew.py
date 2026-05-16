@@ -3,9 +3,6 @@ from agents import CodeAgents
 from tasks import CodeTasks
 
 class CodeAnalysisCrew:
-    def __init__(self, code):
-        self.code = code
-
     def run(self):
         agents = CodeAgents()
         tasks = CodeTasks()
@@ -13,19 +10,22 @@ class CodeAnalysisCrew:
         # Instanciar agentes
         analista = agents.analizador()
         optimista = agents.optimizador()
-        doc = agents.documentador()
+        estilista = agents.estilista()
+        documentador = agents.documentador()
 
         # Instanciar tareas
         t1 = tasks.tarea_analisis(analista)
-        t2 = tasks.tarea_optimizacion(optimista)
-        t3 = tasks.tarea_documentacion(doc)
+        t2 = tasks.tarea_optimizacion(optimista, context=[t1])
+        t3 = tasks.tarea_buenas_practicas(estilista, context=[t1, t2])
+        t4 = tasks.tarea_documentacion(documentador, context=[t1, t2, t3])
+        t5 = tasks.generate_pdf_task(documentador, context=[t4])
 
         crew = Crew(
-            agents=[analista, optimista, doc],
-            tasks=[t1, t2, t3],
-            process=Process.sequential, # El orden importa aquí
+            agents=[analista, optimista, estilista, documentador],
+            tasks=[t1, t2, t3, t4, t5],
+            process=Process.sequential,
             verbose=True
         )
 
-        return crew.kickoff(inputs={'code': self.code})
+        return crew
 

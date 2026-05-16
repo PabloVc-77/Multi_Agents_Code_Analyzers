@@ -1,7 +1,7 @@
 from crewai import Agent, LLM
 import yaml
 import os
-
+from tools import generar_pdf
 
 class CodeAgents:
 
@@ -33,10 +33,18 @@ class CodeAgents:
             llm=self.llm,
             verbose=True
         )
+    
+    def estilista(self) -> Agent:
+        return Agent(
+            config=self.config['estilista'],
+            llm=self.llm,
+            verbose=True
+        )
 
     def documentador(self) -> Agent:
         return Agent(
             config=self.config['documentador'],
             llm=self.llm,
-            verbose=True
+            verbose=True,
+            tools=[generar_pdf]
         )

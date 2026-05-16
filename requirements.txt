@@ -3,3 +3,4 @@ python-dotenv
 pyyaml
 litellm
 fpdf2
+markdown2
