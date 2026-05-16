@@ -1,8 +1,7 @@
 from crewai import Agent, LLM
 import yaml
 import os
-from tools import generar_pdf
-
+from tools import generar_pdf, obtener_metadatos_github, leer_repositorio_github
 class CodeAgents:
 
     def __init__(self):
@@ -19,6 +18,15 @@ class CodeAgents:
         # Cargar YAML
         with open("config/agents.yaml", "r", encoding="utf-8") as file:
             self.config = yaml.safe_load(file)
+
+    def explorador(self) -> Agent:
+        return Agent(
+            config=self.config['explorador'],
+            llm=self.llm,
+            tools=[obtener_metadatos_github, leer_repositorio_github],
+            verbose=True
+        )
+
 
     def analizador(self) -> Agent:
         return Agent(

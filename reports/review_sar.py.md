@@ -1,5 +1,5 @@
 **Informe de Revisión de Código – `sar.py`**  
-*Fecha: 16‑05‑2026*  
+*Fecha: 2026‑05‑16*  
 
 ---  
 
@@ -7,103 +7,118 @@
 
 | Métrica | Valor |
 |--------|-------|
-| **Puntuación de calidad global (0‑10)** | **5.2** |
-| **Veredicto** | El código funciona pero presenta **vulnerabilidades críticas**, **deficiencias de rendimiento** y **varios problemas de estilo y robustez** que impiden un merge seguro. Se requiere una refactorización importante antes de considerarlo listo para producción. |
+| **Puntuación de calidad global (0‑10)** | **5.8** |
+| **Veredicto breve** | El código funciona, pero contiene vulnerabilidades críticas (deserialización con `pickle`), errores lógicos que pueden provocar excepciones y varios problemas de rendimiento y estilo que afectan a la mantenibilidad y a la eficiencia en producción. Se requiere una serie de correcciones antes de permitir el merge. |
 
 ---  
 
-## 2. Problemas Críticos (DEBEN corregirse antes de merge)
+## 2. Problemas Críticos (DEBEN corregirse antes del merge)
 
-| # | Área | Descripción | Impacto | Acción requerida |
-|---|------|-------------|---------|------------------|
-| C1 | **Deserialización insegura** (`pickle`) | `save_info`/`load_info` usan `pickle.dump/load` sobre datos que pueden ser controlados por terceros. Permite ejecución arbitraria de código. | **CRÍTICA** | Sustituir por JSON (o por un *restricted unpickler*). |
-| C2 | **Uso de `assert` para validar entrada** (`create_semantic_model`) | En modo optimizado (`python -O`) los `assert` desaparecen, dejando la función sin validación. | **ALTA** | Reemplazar por comprobación explícita que lance `ValueError`. |
-| C3 | **Acceso directo a `args['positional']` / `args['semantic']`** (`index_dir`) | Provoca `KeyError` si el llamador omite esas claves, exponiendo trazas de pila. | **ALTA** | Usar `args.get(..., False)` y validar tipos. |
-| C4 | **Uso de objetos no inicializados** (`create_kdtree`) | Si `self.model` es `None`, `self.model.fit()` lanza `AttributeError`. | **ALTA** | Comprobar que el modelo está cargado y lanzar `RuntimeError` controlado. |
-| C5 | **Métodos sin implementar** (`solve_and_show`, `update_chunks`, `create_kdtree` placeholders) | Devuelven `None` o `pass`, lo que puede generar errores inesperados en tiempo de ejecución. | **MEDIA** | Implementar la lógica o lanzar `NotImplementedError`. |
+| # | Área | Descripción | Acción requerida |
+|---|------|-------------|------------------|
+| 1 | **Seguridad** | Uso de `pickle.load()` / `pickle.dump()` para persistir datos → ejecución de código arbitrario. | Sustituir por JSON (o por un *restricted unpickler*) y actualizar `save_info` / `load_info`. |
+| 2 | **Lógica** | `create_semantic_model` no devuelve el modelo en el caso `"Spacy"` (falta `return`). | Añadir `return` y reemplazar `assert` por `ValueError`. |
+| 3 | **Lógica / Crash** | `self.semantic_threshold` inicializado a `None` y usado en comparaciones numéricas → `TypeError`. | Inicializar con un valor numérico por defecto (p.ej. `0.0`) y validar antes de usar. |
+| 4 | **Seguridad / Robustez** | `index_dir` accede a `args['positional']` y `args['semantic']` sin validar → `KeyError`. | Usar `args.get(..., False)` y validar tipos. |
+| 5 | **Seguridad / ReDoS** | Expresión regular sin límite de longitud en `solve_query`. | Imponer `MAX_QUERY_LEN` y validar antes de ejecutar `re.findall`. |
+| 6 | **Robustez** | Argumento mutable por defecto `prev:Dict={}` en `solve_query`. | Cambiar a `prev: Optional[Dict] = None`. |
+| 7 | **Funcionalidad incompleta** | `solve_and_show` está sin implementar (`pass`). | Implementar la lógica o eliminar la función del API público. |
 
 ---  
 
 ## 3. Hallazgos de Seguridad  
 
-| # | Fragmento / línea | Tipo | Severidad | Descripción | Corrección propuesta |
-|---|-------------------|------|-----------|-------------|----------------------|
-| S1 | `save_info` / `load_info` (pickle) | Deserialización insegura | **CRÍTICA** | Reemplazar por JSON (ver tabla de correcciones) o usar `RestrictedUnpickler`. |
-| S2 | `assert modelname in (…)` en `create_semantic_model` | Validación con `assert` | **MEDIA** | Reemplazar por `if modelname not in allowed: raise ValueError`. |
-| S3 | Falta de validación de `args['positional']` y `args['semantic']` | Parámetros externos | **BAJA** | Usar `args.get('positional', False)` y validar tipos. |
-| S4 | `self.model` puede ser `None` antes de `fit()` | Uso de objeto no inicializado | **BAJA** | Añadir guardia `if self.model is None: raise RuntimeError`. |
-| S5 | `solve_and_test` → `line.split('\t')` sin captura de excepción | Entrada no controlada | **BAJA** | Envolver en `try/except ValueError` y registrar línea inválida. |
-| S6 | `load_info` y `save_info` no verifican rutas ni permisos | Acceso a fichero | **BAJA** | Validar que la ruta sea absoluta y que el proceso tenga permisos de lectura/escritura. |
+| # | Tipo | Severidad | Descripción | Corrección propuesta |
+|---|------|-----------|-------------|----------------------|
+| 1 | Deserialización insegura (`pickle`) | **CRÍTICA** | `pickle.load()` permite ejecutar código arbitrario. | Reemplazar por JSON (ver ejemplo en la tabla) o usar `SafeUnpickler`. |
+| 2 | Validación de argumentos con `assert` | **MEDIA** | `assert` puede desactivarse con `-O`. | Cambiar a `if …: raise ValueError`. |
+| 3 | Falta de validación de parámetros (`args['positional']`) | **BAJA** | `KeyError` si el parámetro falta. | Usar `args.get('positional', False)`. |
+| 4 | Posible ReDoS en la regex de `solve_query` | **MEDIA** | `re.findall(r'"[^"]*"|\S+', query)` sin límite de longitud. | Definir `MAX_QUERY_LEN` (p.ej. 4096) y lanzar `ValueError` si se supera. |
+| 5 | Exposición de IDs internos en `reverse_posting` | **BAJA** | Devuelve la lista completa de `artid` no presentes, permitiendo enumeración. | Añadir paginación (`limit`) y devolver sólo la diferencia necesaria. |
+| 6 | Uso de `print` para logging | **BAJA** | Mezcla salida con lógica, dificulta auditoría. | Sustituir por el módulo `logging`. |
 
 ---  
 
 ## 4. Hallazgos de Rendimiento  
 
-| # | Fragmento / línea | Problema | Impacto | Solución recomendada |
-|---|-------------------|----------|---------|----------------------|
-| R1 | Concatenación de cadenas en bucle (`parse_article`) | Complejidad **O(n²)** | **ALTO** | Construir una lista de fragmentos y `'\n'.join()` al final. |
-| R2 | Llamadas repetidas a `self.model.query` en `solve_semantic_query` | Re‑cálculo costoso | **ALTO** | Incrementar `top_k` exponencialmente y romper cuando se supera el umbral. |
-| R3 | `sorted(self.articles.keys())` en cada `reverse_posting` | Re‑cálculo O(N log N) | **MEDIO** | Cachear la lista ordenada (`self._sorted_artids`). |
-| R4 | `sorted(files)` en cada directorio de `index_dir` | Orden innecesario | **MEDIO** | Eliminar `sorted`, iterar directamente. |
-| R5 | Búsqueda lineal `p+offset in positions2` en `get_positionals` | O(p·q) | **MEDIO** | Convertir `positions2` a `set` y usar intersección. |
-| R6 | Compilación repetida de regex en `solve_query` y bucles de pruebas | Overhead menor | **BAJO** | Compilar una vez (`TOKEN_RE = re.compile(...)`). |
-| R7 | `get_posting` tokeniza siempre el término | Overhead menor | **BAJO** | Normalizar con `lower()` directamente. |
-| R8 | `solve_and_count` / `solve_and_test` crean listas de resultados sin pre‑asignar | Pequeña ineficiencia | **BAJO** | Opcional: usar list comprehensions. |
+| # | Fragmento | Problema | Impacto | Optimización sugerida |
+|---|-----------|----------|---------|-----------------------|
+| 1 | Concatenación de strings en bucle (`txt_secs += …`) | O(n²) por creación de nuevos objetos `str`. | Alto (parseo lento en colecciones grandes). | Construir una lista de partes y `''.join()` al final. |
+| 2 | `sorted(self.articles.keys())` en cada llamada a `reverse_posting`. | Ordenación O(N log N) repetida. | Medio‑alto. | Cachear la lista ordenada (`self._sorted_artids`). |
+| 3 | `reverse_posting` genera la lista completa de IDs no presentes. | Uso de memoria O(N). | Medio. | Limitar resultados con parámetro `limit`. |
+| 4 | Búsqueda posicional con bucles `while` anidados. | Complejidad potencial O(p·q) → lento para vocabulario frecuente. | Medio. | Convertir postings a `set` y usar intersección de conjuntos. |
+| 5 | Bucle que vuelve a lanzar consultas al modelo semántico (`self.model.query`) con tamaños crecientes. | Multiplica el coste de consultas costosas (BERT, etc.). | Alto. | Duplicar `k` progresivamente y romper el bucle tan pronto como el umbral se cumpla. |
+| 6 | Tokenización repetida en `solve_query` y `get_posting`. | Trabajo O(L) innecesario por token. | Bajo‑medio. | Cachear tokenizaciones dentro de la llamada. |
+| 7 | `sorted(files)` en `index_dir`. | Ordenación innecesaria por directorio. | Bajo. | Iterar sin ordenar. |
+| 8 | Creación de árbol k‑d sin idempotencia (`create_kdtree`). | Re‑entrenamiento costoso si se llama varias veces. | Medio. | Marcar con bandera `_kdtree_built`. |
+| 9 | Uso de `print` para logging en `load_semantic_model`. | Afecta pruebas y rendimiento de I/O. | Bajo. | Reemplazar por `logging`. |
 
 ---  
 
 ## 5. Hallazgos de Estilo y Calidad  
 
-| # | Tipo | Severidad | Comentario | Mejora sugerida |
-|---|------|-----------|------------|-----------------|
-| E1 | Nomenclatura | MENOR | `all_atribs`, `chuncks` → `all_attrs`, `chunks`. | Renombrar y actualizar referencias. |
-| E2 | Constantes “mágicas” | MENOR | `10`, `200`, `2` aparecen como literales. | Declarar constantes (`DEFAULT_SHOW_MAX`, `MAX_EMBEDDINGS`, `INITIAL_MULTIPLIER`). |
-| E3 | Docstrings insuficientes | MENOR | Falta descripción de parámetros `**args` y tipos de retorno. | Completar docstrings siguiendo PEP‑257. |
-| E4 | Mutable defaults (`prev:Dict={}`) | MENOR | Compartir estado entre llamadas. | Cambiar a `prev: Optional[Dict]=None`. |
-| E5 | Indentación mixta (tabs + spaces) | MAYOR | `create_kdtree` contiene tabulaciones que pueden generar `IndentationError`. | Uniformizar a 4 espacios. |
-| E6 | Importaciones desordenadas | MENOR | No siguen orden PEP‑8. | Re‑ordenar: stdlib → terceros → locales. |
-| E7 | Uso de `print` para logging | SUGERENCIA | No se controla nivel de verbosidad. | Reemplazar por módulo `logging`. |
-| E8 | Métodos `set_showall`, `set_semantic_threshold` sin snake_case descriptivo. | MENOR | Renombrar a `set_show_all`, `set_semantic_threshold`. |
-| E9 | Falta de anotaciones de tipo en varios métodos. | MENOR | Añadir `-> None` o tipos concretos. |
-| E10 | Duplicación de lógica en `solve_and_count` / `solve_and_test`. | MENOR | Extraer método privado `_process_query_line`. |
+| # | Problema | Severidad | Corrección sugerida |
+|---|----------|-----------|---------------------|
+| 1 | `assert` para validar entrada de usuario. | Mayor | Reemplazar por `raise ValueError`. |
+| 2 | Argumento mutable por defecto (`prev:Dict={}`). | Mayor | Cambiar a `prev: Optional[Dict] = None`. |
+| 3 | Nombre tipográfico `all_atribs`. | Menor | Renombrar a `ALL_ATTRS`. |
+| 4 | `self.semantic_threshold = None` → comparaciones numéricas. | Mayor | Inicializar con `0.0`. |
+| 5 | Acceso directo a `args['positional']` / `args['semantic']`. | Menor | Usar `args.get(..., False)`. |
+| 6 | Método sin implementar (`solve_and_show`). | Menor | Implementar o eliminar. |
+| 7 | Mezcla de tabs y spaces, indentación inconsistente. | Menor | Uniformizar a 4 espacios. |
+| 8 | Uso de `pickle` (seguridad). | Mayor | Cambiar a JSON o *restricted unpickler*. |
+| 9 | Nombres con errores tipográficos (`chuncks`, `chunck_index`). | Menor | Renombrar a `chunks`, `chunk_index`. |
+|10| Uso de `print` para logging. | Menor | Adoptar módulo `logging`. |
+|11| Valores “mágicos” (`200`, `4096`) codificados en el cuerpo. | Sugerencia | Definir como constantes de clase. |
+|12| Falta de docstrings estructurados (PEP 257). | Sugerencia | Añadir docstrings con `Args`, `Returns`, `Raises`. |
+|13| No se valida la salida de `split('\t')` en `solve_and_test`. | Menor | Capturar `ValueError` y registrar. |
+|14| `solve_query` devuelve tupla aunque solo se usa la lista. | Sugerencia | Cambiar firma a devolver solo la lista. |
+|15| Falta de tipado estático en varias funciones. | Sugerencia | Añadir anotaciones de tipo (`-> List[int]`, etc.). |
+|16| Uso de `print` en `load_semantic_model`. | Sugerencia | Reemplazar por `logger.info`. |
+|17| Algoritmo posicional complejo y poco legible. | Sugerencia | Reescribir usando intersección de conjuntos (ver tabla). |
+|18| No se valida la longitud de la consulta antes de la regex. | Sugerencia | Añadir límite (`MAX_QUERY_LEN`). |
+|19| Constantes definidas dentro de `__init__` (`MAX_EMBEDDINGS`). | Sugerencia | Declararlas como atributos de clase. |
+|20| Falta de manejo de errores al abrir archivos. | Sugerencia | Capturar `FileNotFoundError`, `IOError`. |
 
 ---  
 
 ## 6. Plan de Acción Recomendado  
 
-1. **Eliminar la vulnerabilidad crítica de deserialización**  
-   * Reemplazar `pickle` por JSON (o implementar `RestrictedUnpickler`).  
-   * Actualizar `save_info` / `load_info` y ejecutar pruebas de compatibilidad.  
+1. **Seguridad primero**  
+   1.1. Reemplazar `pickle` por JSON (o implementar `SafeUnpickler`).  
+   1.2. Cambiar todas las validaciones con `assert` a `raise ValueError`.  
+   1.3. Añadir límite de longitud a la consulta y validar antes de la regex.  
 
-2. **Corregir validaciones de entrada**  
-   * Sustituir `assert` por comprobación explícita en `create_semantic_model`.  
-   * Modificar `index_dir` para usar `args.get(..., False)` y validar tipos.  
+2. **Corregir errores lógicos críticos**  
+   2.1. Añadir `return` faltante en `create_semantic_model` y usar `ValueError` para nombres no soportados.  
+   2.2. Inicializar `self.semantic_threshold` con `0.0` y validar su tipo en `solve_semantic_query`.  
+   2.3. Reemplazar argumentos mutables por `None` en `solve_query`.  
 
-3. **Garantizar inicialización de objetos críticos**  
-   * Añadir guardas en `create_kdtree` y en cualquier método que use `self.model`.  
+3. **Mejorar robustez de la API**  
+   3.1. Modificar `index_dir` para usar `args.get` con valores por defecto.  
+   3.2. Implementar `solve_and_show` (o eliminarla).  
+   3.3. Sustituir `print` por `logging` en todo el módulo.  
 
-4. **Implementar los métodos pendientes** (`solve_and_show`, `update_chunks`, `create_kdtree` placeholders) o, si no se usan, lanzar `NotImplementedError`.  
+4. **Optimizar rendimiento**  
+   4.1. Refactorizar concatenaciones de strings en `parse_article` usando listas y `''.join()`.  
+   4.2. Cachear la lista ordenada de `article` IDs (`self._sorted_artids`).  
+   4.3. Limitar resultados en `reverse_posting` con parámetro `limit`.  
+   4.4. Reescribir la búsqueda posicional con intersección de conjuntos.  
+   4.5. Optimizar el bucle de consultas semánticas: duplicar `k` y romper temprano.  
+   4.6. Cachear tokenizaciones dentro de `solve_query` / `get_posting`.  
+   4.7. Eliminar `sorted(files)` en `index_dir`.  
+   4.8. Hacer `create_kdtree` idempotente (bandera `_kdtree_built`).  
 
-5. **Optimizar rendimiento**  
-   * Refactorizar `parse_article` usando listas y `join`.  
-   * Re‑escribir `solve_semantic_query` con crecimiento exponencial de `top_k`.  
-   * Cachear `sorted(self.articles.keys())` en `reverse_posting`.  
-   * Cambiar `sorted(files)` por iteración directa en `index_dir`.  
-   * Mejorar `get_positionals` usando `set` y operaciones de intersección.  
-   * Compilar regex una sola vez (`TOKEN_RE`).  
+5. **Estilo y calidad**  
+   5.1. Renombrar variables con errores tipográficos (`all_atribs`, `chuncks`, `chunck_index`).  
+   5.2. Definir todas las constantes como atributos de clase (`MAX_QUERY_LEN`, `DEFAULT_SEMANTIC_MODEL`, etc.).  
+   5.3. Añadir docstrings y anotaciones de tipo a todas las funciones.  
+   5.4. Uniformizar indentación a 4 espacios.  
+   5.5. Revisar y eliminar código muerto o no usado.  
 
-6. **Aplicar mejoras de estilo y calidad**  
-   * Renombrar variables y métodos según PEP‑8.  
-   * Declarar todas las constantes al inicio del módulo.  
-   * Completar docstrings y añadir anotaciones de tipo.  
-   * Reemplazar `print` por `logging` (opcional, pero recomendado).  
-   * Uniformizar indentación a 4 espacios.  
-
-7. **Ejecutar pruebas de regresión**  
-   * Añadir pruebas unitarias que cubran los caminos de error (p.ej., carga de modelo fallida, archivo JSON corrupto).  
-   * Ejecutar `pytest --cov` y asegurar cobertura > 85 %.  
-
-8. **Re‑ejecutar análisis estático** (Bandit, Flake8, MyPy) y validar que no queden nuevos hallazgos.  
+6. **Pruebas y CI**  
+   6.1. Añadir pruebas unitarias que cubran los casos de error (p.ej. carga de archivo inexistente, línea de test sin tabulador, `None` en `semantic_threshold`).  
+   6.2. Integrar análisis estático (`flake8`, `mypy`, `bandit`) en la pipeline CI.  
 
 ---  
 
@@ -111,13 +126,13 @@
 
 | Aspecto | Comentario |
 |---------|------------|
-| **Arquitectura modular** | La separación entre indexación, consultas booleanas y semánticas está bien definida. |
-| **Uso de expresiones regulares** | La tokenización de consultas (`TOKEN_RE`) permite manejar frases entre comillas y operadores lógicos. |
-| **Soporte para búsquedas posicionales** | Implementación de `get_positionals` muestra una visión avanzada del motor de búsqueda. |
-| **Facilidad de extensión** | La fábrica `create_semantic_model` permite añadir nuevos modelos sin tocar el resto del código. |
-| **Documentación inicial** | Existe una breve descripción del módulo y de la clase, lo que facilita la comprensión global. |
-| **Uso de `Path` y `os.walk`** | Manejo correcto de rutas y recorrido de directorios. |
-| **Separación de responsabilidades** | Métodos como `solve_query`, `solve_semantic_query` y `show_stats` están claramente delimitados. |
+| **Arquitectura modular** | El código separa claramente la indexación, la búsqueda posicional y la búsqueda semántica, lo que facilita la extensión. |
+| **Uso de modelos avanzados** | Integra varios modelos de embeddings (SBERT, Beto, Spacy) ofreciendo flexibilidad al usuario. |
+| **Soporte de consultas booleanas** | Implementa operadores `AND`, `OR`, `NOT` y manejo de frases entre comillas. |
+| **Persistencia de estado** | La capacidad de guardar y cargar el índice permite reutilizar trabajos costosos. |
+| **Documentación parcial** | Algunas funciones ya incluyen docstrings que describen su propósito. |
+| **Uso de typing** | Emplea anotaciones de tipo en varios lugares, lo que ayuda a los IDE y a `mypy`. |
+| **Manejo de stop‑words y stemming** | Ofrece opciones configurables (`positional`, `semantic`) para adaptar la indexación a diferentes casos de uso. |
 
 ---  
 
@@ -131,4 +146,6 @@
 {
   "md_path": "reports/review_sar.py.md"
 }
-```
+```  
+
+---  

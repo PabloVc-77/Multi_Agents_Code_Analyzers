@@ -1,10 +1,27 @@
+explorar_repositorio:
+  description: >
+    Explora el repositorio de GitHub: {repo_url}
+
+    Sigue estos pasos en orden:
+    1. Usa la herramienta "Metadatos de Repositorio GitHub" para obtener información
+       general: descripción, lenguajes, stars, issues abiertos y últimos commits.
+    2. Usa la herramienta "Lector de Repositorio GitHub" para obtener la estructura
+       de directorios y el código fuente completo de todos los archivos relevantes.
+
+    Presenta los resultados de forma estructurada e incluye TODA la información
+    obtenida, ya que el resto del equipo la usará para sus análisis.
+  expected_output: >
+    Un informe completo con:
+    - Metadatos del repositorio (lenguajes, descripción, actividad)
+    - Árbol de archivos del proyecto
+    - Código fuente completo de todos los archivos relevantes
+    Todo el contenido debe estar disponible para que los siguientes agentes lo analicen.
+  agent: explorador
+
 analisis_de_seguridad:
   description: >
-    Analiza el siguiente código en busca de vulnerabilidades de seguridad:
-
-    ```
-    {code}
-    ```
+    Basándote en el código del repositorio {repo_url} proporcionado por el explorador,
+    realiza un análisis exhaustivo de seguridad.
 
     Céntrate en:
     - Vulnerabilidades de inyección (SQL, comandos, LDAP, etc.)
@@ -17,24 +34,21 @@ analisis_de_seguridad:
     - Mala configuración de seguridad
 
     Por cada problema encontrado, proporciona:
-    1. La línea exacta o fragmento de código afectado
+    1. El archivo y fragmento de código afectado
     2. Una descripción de la vulnerabilidad
     3. Su severidad (CRÍTICA / ALTA / MEDIA / BAJA)
     4. Una corrección concreta con el código corregido
   expected_output: >
     Una lista estructurada de problemas de seguridad encontrados en el código.
-    Cada problema debe incluir: el fragmento afectado, tipo de vulnerabilidad,
+    Cada problema debe incluir: archivo, fragmento afectado, tipo de vulnerabilidad,
     nivel de severidad y una corrección concreta.
     Si no se encuentran problemas, indicar explícitamente "No se detectaron vulnerabilidades de seguridad."
   agent: analizador
 
 tarea_optimizacion:
   description: >
-    Analiza el siguiente código en busca de problemas de rendimiento:
-
-    ```
-    {code}
-    ```
+    Basándote en el código del repositorio {repo_url} proporcionado por el explorador,
+    realiza un análisis exhaustivo de rendimiento.
 
     Céntrate en:
     - Complejidad algorítmica (bucles anidados, iteraciones redundantes)
@@ -46,24 +60,21 @@ tarea_optimizacion:
     - Cálculos redundantes
 
     Por cada problema encontrado, proporciona:
-    1. La línea exacta o fragmento de código afectado
+    1. El archivo y fragmento de código afectado
     2. Una descripción del problema de rendimiento
     3. Su impacto (ALTO / MEDIO / BAJO)
     4. Una versión optimizada del código
   expected_output: >
     Una lista estructurada de problemas de rendimiento encontrados en el código.
-    Cada problema debe incluir: el fragmento afectado, descripción del problema,
+    Cada problema debe incluir: archivo, fragmento afectado, descripción del problema,
     nivel de impacto y una corrección optimizada.
     Si no se encuentran problemas, indicar explícitamente "No se detectaron problemas de rendimiento."
   agent: optimizador
 
 buenas_practicas:
   description: >
-    Analiza el siguiente código en busca de violaciones de estilo, legibilidad y buenas prácticas:
-
-    ```
-    {code}
-    ```
+    Basándote en el código del repositorio {repo_url} proporcionado por el explorador,
+    realiza un análisis de estilo, legibilidad y buenas prácticas.
 
     Céntrate en:
     - Convenciones de nomenclatura (variables, funciones, clases)
@@ -76,13 +87,13 @@ buenas_practicas:
     - Buenas prácticas específicas del lenguaje
 
     Por cada problema encontrado, proporciona:
-    1. La línea exacta o fragmento de código afectado
+    1. El archivo y fragmento de código afectado
     2. Una descripción de la violación de estilo
     3. Su severidad (MAYOR / MENOR / SUGERENCIA)
     4. La versión corregida
   expected_output: >
     Una lista estructurada de problemas de estilo y buenas prácticas.
-    Cada problema debe incluir: el fragmento afectado, descripción de la violación,
+    Cada problema debe incluir: archivo, fragmento afectado, descripción de la violación,
     severidad y código corregido.
     Si no se encuentran problemas, indicar explícitamente "El código cumple todos los estándares de estilo."
   agent: estilista
@@ -95,7 +106,7 @@ resumir:
     - Inspector de Calidad de Código
 
     Usando todos sus hallazgos, redacta un informe de revisión de código
-    completo y bien estructurado para el fichero: {filename}
+    completo y bien estructurado para el repositorio: {repo_url}
 
     El informe debe seguir esta estructura:
     1. **Resumen Ejecutivo** — puntuación de calidad global (0-10) y veredicto breve
@@ -107,10 +118,6 @@ resumir:
     7. **Puntos Positivos** — qué hace bien el código
 
     Usa formato markdown claro. Sé directo, constructivo y accionable.
-
-    Una vez generado el informe, usa la herramienta "Generador de PDF"
-    pasándole la ruta del archivo markdown: reports/review_{filename}.md
-
   expected_output: >
     Un informe de revisión de código completo y bien formateado en markdown que cubre
     hallazgos de seguridad, rendimiento y estilo. Incluye una puntuación de calidad global,

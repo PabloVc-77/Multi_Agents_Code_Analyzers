@@ -14,28 +14,29 @@ load_dotenv()
 def main():
     # PRE-PROCESAR INFORMACIÓN
     if len(sys.argv) < 2:
-        print("No se han aportado archivos para analizar")
-        print("Uso: python main.py <path_to_file>")
+        print("Uso:    python main.py <github_repo_url>")
+        print("Ejemplo: python main.py https://github.com/usuario/repo")
         sys.exit(1)
-
-    filepath = sys.argv[1]
-
-    if not os.path.exists(filepath):
-        print(f"No se ha encontrado el archivo: {filepath}")
-        sys.exit(1)
-
-    with open(filepath, "r", encoding="utf-8") as f:
-        code = f.read()
  
-    filename = os.path.basename(filepath)
+    repo_url = sys.argv[1].rstrip("/")
+ 
+    if not repo_url.startswith("https://github.com/"):
+        print("Error: la URL debe ser de GitHub (https://github.com/usuario/repo)")
+        sys.exit(1)
+ 
+    # Nombre del repo para nombrar los archivos de salida
+    filename = repo_url.split("/")[-1]
+ 
+    os.makedirs("reports", exist_ok=True)
+ 
+    print(f"\nAnalizando repositorio: {repo_url}")
+    print(f"Informe de salida:      reports/review_{filename}.md\n")
+ 
+    CodeAnalysisCrew().run().kickoff(inputs={
+        "repo_url": repo_url,
+        "filename": filename,
+    })
 
-    # Iniciar la CREW
-    CodeAnalysisCrew().run().kickoff(
-        inputs={
-            "code": code,
-            "filename": filename,
-        }
-    )
 
     print(f"\n Full report saved to: outputs/reports/review_{filename}.md")
 
